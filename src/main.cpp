@@ -47,7 +47,7 @@ void setup() {
     display.setTextColor(TFT_WHITE, TFT_BLACK);
     display.setTextSize(2);
     display.setCursor(8, 8);
-    display.println("MaTouch Radar");
+    display.println("MaTouch Canadian Radar");
     statusY = 32;
     showStatus("Display OK");
 
@@ -113,6 +113,6 @@ void loop() {
 
     // --- Radar refresh (RadarMap handles its own timer internally) ---
     if (radar) {
-        radar->update(dimmer->isDimmed());
+        radar->update(false);
     }
 }
