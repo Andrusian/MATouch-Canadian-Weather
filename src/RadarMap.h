@@ -83,9 +83,6 @@ static const double CENTRE_LON[3] = {
 static constexpr int DISP_W = 480;
 static constexpr int DISP_H = 320;
 
-// Centre-tap detection zone (pixels from display centre)
-static constexpr int TAP_CENTRE_ZONE = 60;
-
 // PNG tile fetch buffer.
 // MSC WMS images are typically 10-25 KB for sparse Canadian radar,
 // occasionally up to ~40 KB for dense precipitation. 50 KB is safe.
@@ -247,19 +244,36 @@ public:
         }
     }
 
+    void printCenterMessage(const char* message) {
+        // 1. Set the anchor point to Middle Center
+        _display->setTextDatum(lgfx::middle_center);
+    
+        // 2. Set your font and color
+        _display->setFont(&fonts::FreeSansBold12pt7b);
+        _display->setTextColor(TFT_WHITE);
+
+        // 3. Draw at (Width / 2, Height / 2)
+        // For MaTouch 480x320, this is (240, 160)
+        _display->drawString(message, _display->width() / 2, _display->height() / 2);
+    }
+
+
+
+
     // ------------------------------------------------------------------
     // onTouch() — centre-tap cycles zoom level.
     // ------------------------------------------------------------------
     bool onTouch(uint16_t tx, uint16_t ty) {
-        int dx = (int)tx - DISP_W / 2;
+/*         int dx = (int)tx - DISP_W / 2;
         int dy = (int)ty - DISP_H / 2;
         if (abs(dx) > TAP_CENTRE_ZONE || abs(dy) > TAP_CENTRE_ZONE)
             return false;
-
+ */
         _zoomIndex = (_zoomIndex + 1) % ZOOM_LEVEL_COUNT;
         Serial.printf("[RadarMap] Zoom -> index %d  z=%d\n",
                       _zoomIndex, ZOOM_LEVELS[_zoomIndex]);
 
+        printCenterMessage("Rescaling");              
         _basemapValid = false;
         _fetchBasemap();
         _lastRadarMs = millis() - RADAR_REFRESH_MS;
