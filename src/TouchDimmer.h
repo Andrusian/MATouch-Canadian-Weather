@@ -12,7 +12,7 @@ public:
     static constexpr uint8_t  BRIGHTNESS_FULL  = 255;
     static constexpr uint8_t  BRIGHTNESS_DIM   = 25;       // ~10% — tweak to taste
     static constexpr uint32_t DOUBLE_TAP_MS    = 500;
-    static constexpr uint16_t CORNER_PX        = 50;
+    static constexpr uint16_t CORNER_PX        = 80;
     static constexpr uint32_t AUTO_DIM_MS      = 2UL * 60UL * 60UL * 1000UL;
 
     using BrightnessCallback = std::function<void(uint8_t)>;
@@ -31,21 +31,14 @@ public:
         if (_dimmed) {
             // Any tap on a dimmed screen just wakes — don't pass to app
             _wake();
-            _firstTapMs = 0;        // wake tap can't be first of a double-tap
             return true;
         }
 
         bool inCorner = (x <= CORNER_PX) && (y >= (_h - CORNER_PX));
 
         if (inCorner) {
-            if (_firstTapMs != 0 && (now - _firstTapMs) <= DOUBLE_TAP_MS) {
-                _dim();
-                _firstTapMs = 0;
-                return true;        // consumed — don't pass double-tap to app
-            }
-            _firstTapMs = now;      // first tap: record, but don't consume
-        } else {
-            _firstTapMs = 0;        // out-of-corner tap cancels pending gesture
+            _dim();
+             return true;        // consumed 
         }
 
         return false;
@@ -55,6 +48,7 @@ public:
     void update() {
         if (!_dimmed && (millis() - _lastActivityMs) >= AUTO_DIM_MS) {
             _dim();
+
         }
     }
 

@@ -59,7 +59,7 @@ static constexpr int ZOOM_50KM  = 10;
 
 // Cycle order for center-tap gesture
 static constexpr int ZOOM_LEVELS[]    = { ZOOM_400KM, ZOOM_100KM, ZOOM_50KM };
-static constexpr int ZOOM_LEVEL_COUNT = 3;
+// static constexpr int ZOOM_LEVEL_COUNT = 3;
 
 class TileCalc {
 public:
