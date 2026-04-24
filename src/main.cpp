@@ -1,6 +1,6 @@
 #include <Arduino.h>
 
-#define DEBUG   // Comment out for production
+//#define DEBUG   // Comment out for production
 #include "LovyanGFX_config.h"
 #include "WiFiProvisioner.h"
 #include "OTAManager.h"

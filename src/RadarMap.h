@@ -90,7 +90,7 @@ static constexpr int ZOOM_LEVEL_COUNT = 3;
 // PNG tile fetch buffer.
 // MSC WMS images are typically 10-25 KB for sparse Canadian radar,
 // occasionally up to ~40 KB for dense precipitation. 50 KB is safe.
-static constexpr int TILE_BUF_SIZE = 150000;
+static constexpr int TILE_BUF_SIZE = 100000;
 
 // Alpha for radar overlay: 0=transparent, 255=opaque.
 static constexpr uint8_t RADAR_ALPHA = 160;   // slightly more opaque
@@ -201,21 +201,21 @@ public:
         }
         _composite->fillScreen(TFT_BLACK);
 
+        Serial.printf("[RadarMap] PSRAM free: %u  largest block: %u\n",
+              heap_caps_get_free_size(MALLOC_CAP_SPIRAM),
+              heap_caps_get_largest_free_block(MALLOC_CAP_SPIRAM));
+
         // PSRAM is safe here: _tileBuf is the *source* buffer fed to pngle/zlib,
         // which reads it sequentially — no alignment constraint.
         // The pngle OPI alignment fault only affects destination sprite writes,
         // which we now route through _composite->drawPng() (an existing safe sprite).
         _tileBuf = (uint8_t*)heap_caps_malloc(TILE_BUF_SIZE, MALLOC_CAP_SPIRAM);
+ 
         if (!_tileBuf) {
             // Fallback to internal RAM at reduced size if PSRAM alloc fails
             Serial.println("[RadarMap] PSRAM tile buf failed, trying internal RAM");
             _tileBuf = (uint8_t*)heap_caps_malloc(50000, MALLOC_CAP_INTERNAL);
         }
-
-
-
-
-
 
         Serial.printf("[RadarMap] Free PSRAM after alloc:  %u\n",
                       ESP.getFreePsram());
@@ -257,16 +257,28 @@ public:
     // onTouch() — centre-tap cycles zoom level.
     // Basemap is already in PSRAM; just update index and force radar refresh.
     // ------------------------------------------------------------------
-    bool onTouch(uint16_t tx, uint16_t ty) {
-        _zoomIndex = (_zoomIndex + 1) % ZOOM_LEVEL_COUNT;
-        Serial.printf("[RadarMap] Zoom -> index %d  z=%d\n",
-                      _zoomIndex, ZOOM_LEVELS[_zoomIndex]);
-
-        printCenterMessage("Rescaling...",0);
-        // Force immediate radar composite rebuild using the new basemap
-        _lastRadarMs = millis() - RADAR_REFRESH_MS;
+bool onTouch(uint16_t tx, uint16_t ty) {
+    if (_menuActive) {
+        _handleMenuTouch(tx, ty);
         return true;
     }
+    // Any tap → open zoom menu
+    _menuActive = true;
+    _drawMenu();
+    return true;
+}
+
+
+//    bool onTouch(uint16_t tx, uint16_t ty) {
+//        _zoomIndex = (_zoomIndex + 1) % ZOOM_LEVEL_COUNT;
+//        Serial.printf("[RadarMap] Zoom -> index %d  z=%d\n",
+//                      _zoomIndex, ZOOM_LEVELS[_zoomIndex]);
+//
+//       printCenterMessage("Rescaling...",0);
+//       // Force immediate radar composite rebuild using the new basemap
+//        _lastRadarMs = millis() - RADAR_REFRESH_MS;
+//        return true;
+//    }
 
     const char* zoomLabel() const {
         switch (_zoomIndex) {
@@ -301,6 +313,7 @@ private:
     uint32_t _lastRadarMs;
     char     _timeStr[12] = "";
     int      _pngOffset   = 0;
+    bool _menuActive = false;
 
     // ------------------------------------------------------------------
     // _gridForIndex() — TileGrid for an arbitrary zoom slot
@@ -391,7 +404,9 @@ private:
     }
 
     // ------------------------------------------------------------------
-    // _buildComposite() — copy active basemap, then overlay MSC GeoMet radar.
+    // _buildComposite() — copy active basemap, 
+    //  then overlay MSC GeoMet radar.
+    //  then overlay MSC lightning map.
     // ------------------------------------------------------------------
     void _buildComposite() {
         int idx = _zoomIndex;
@@ -459,7 +474,11 @@ private:
                             int x, int y, int w, int h,
                             bool isSnow)
     {
+        Serial.printf("[RadarMap] _overlayRadarImage called, pngLen=%d\n", len);
         lgfx::LGFX_Sprite tempRadar(_display);
+
+
+        
         tempRadar.setPsram(true);
 
         if (!tempRadar.createSprite(w, h))
@@ -468,6 +487,7 @@ private:
         uint32_t chromaKey = 0x000001;
         tempRadar.fillScreen(chromaKey);
         tempRadar.drawPng(data, len, 0, 0);
+        
 
         for (int py = 0; py < h; py++) {
             for (int px = 0; px < w; px++) {
@@ -480,20 +500,44 @@ private:
                 uint8_t g = ((rawCol >>  5) & 0x3F) << 2;
                 uint8_t b = ( rawCol        & 0x1F) << 3;
 
-                uint16_t displayCol;
+                uint16_t displayCol=rawCol;
 
-                if (isSnow) {
-                    displayCol = 0x94B2;
-                } else {
-                    if (b > 200 && g > 200 && r < 150)
-                        displayCol = 0x5EBF;
-                    else if (g > 180 && r < 150)
-                        displayCol = 0x07E0;
-                    else if (r > 180 && g < 150)
-                        displayCol = 0xF800;
-                    else
-                        displayCol = rawCol;
+
+                if (b>200 && r>100 && g>100) {
+                    continue;   // skip the blues
                 }
+                else if (b>200) {
+                    displayCol = 0x07e0;
+                }
+                else if (b>160) {
+                    displayCol = 0x0640;
+                }
+
+                //if (isSnow) {
+                //    displayCol = 0x94B2;
+                //} else {
+                    // YELLOW
+                //    if (r > 128 && g > 128 && b < 50) {
+                //        displayCol = 0xffe0; 
+                //    } // RED
+                //    else if (r > 140 ) {
+                //        displayCol = 0xe8a1; 
+                //    }
+                //    else if (g > 200) {    // light green
+                //        displayCol = 0x07e0; 
+                //    }  // GREEN
+                //    else if (g > 180) {       // next green
+                //        displayCol = 0x0640; 
+                //    }
+                //    else if (g > 140) {     //next green
+                //        displayCol = 0x0440; 
+                //    }
+//
+                //    else {      // no transation
+                //        displayCol = 0x07ff; 
+                //    }
+
+                 // }
 
                 uint16_t bgCol = _composite->readPixel(x + px, y + py);
                 uint16_t blended = ((displayCol & 0xF7DE) >> 1) + ((bgCol & 0xF7DE) >> 1);
@@ -504,6 +548,60 @@ private:
         tempRadar.deleteSprite();
     }
 
+// ------------------------------------------------------------------
+// Zoom selection menu — adapted from SecurityMonitor
+// ------------------------------------------------------------------
+void _drawMenu() {
+    _display->setFont(&fonts::Font0);   // ← reset to default bitmap font
+    _display->setTextSize(2);
+    static const char* zoomNames[ZOOM_LEVEL_COUNT] = { "400km", "100km", " 50km" };
+
+    _display->fillScreen(TFT_BLACK);
+    _display->setTextColor(TFT_WHITE, TFT_BLACK);
+    _display->setTextSize(2);
+    _display->setCursor(10, 8);
+    _display->print("Select Zoom");
+
+    int rowH   = 52;
+    int startY = 60;
+    for (int i = 0; i < ZOOM_LEVEL_COUNT; i++) {
+        int      y        = startY + i * rowH;
+        bool     selected = (i == _zoomIndex);
+        uint16_t bg       = selected ? 0xFD20 : 0x2104;   // orange / dark grey
+        _display->fillRect(10, y, DISP_W - 20, rowH - 4, bg);
+        _display->setTextColor(TFT_WHITE, bg);
+        _display->setTextSize(2);
+        _display->setCursor(20, y + 14);
+        _display->print(zoomNames[i]);
+        Serial.printf("[RadarMap menu draw] i=%d y=%d %s\n", i, y, zoomNames[i]);
+    }
+}
+
+void _handleMenuTouch(uint16_t x, uint16_t y) {
+    int rowH   = 52;
+    int startY = 60;
+    int pad    = 12;   // extra slop for finger imprecision
+
+    Serial.printf("[RadarMap menu touch] x=%d y=%d\n", x, y);
+
+    for (int i = 0; i < ZOOM_LEVEL_COUNT; i++) {
+        // Row drawn at displayY = startY + i*rowH, height = rowH-4
+        // Touch X runs 319(top)→0(bottom), so invert:
+        int xHigh = 319 - (startY + i * rowH)           + pad;
+        int xLow  = 319 - (startY + i * rowH + rowH - 4) - pad;
+        Serial.printf("[RadarMap menu] i=%d xHigh=%d xLow=%d\n", i, xHigh, xLow);
+        if ((int)x <= xHigh && (int)x >= xLow) {
+            Serial.printf("[RadarMap menu] zoom selected: %d\n", i);
+            _zoomIndex   = i;
+            _menuActive  = false;
+            _lastRadarMs = millis() - RADAR_REFRESH_MS;
+            return;
+        }
+    }
+    Serial.println("[RadarMap menu] cancelled");
+    _menuActive  = false;
+    _lastRadarMs = millis() - RADAR_REFRESH_MS;
+}
 
     // ------------------------------------------------------------------
 
@@ -624,7 +722,6 @@ private:
         if (bytesRead == 0) {
             Serial.println("[RadarMap] No data received");
             return 0;
-
         }
 
         if (bytesRead == TILE_BUF_SIZE) {
@@ -658,113 +755,6 @@ private:
 
         _pngOffset = pngOffset;
         return bytesRead;
-    }
-
-    // ------------------------------------------------------------------
-    // _remapRadarColours() — remap MSC GeoMet palette
-    // ------------------------------------------------------------------
-    uint16_t _remapOnePixel(uint16_t px, bool isSnow) {
-        if (px == 0x0000) return 0x0000;
-        uint8_t r = ((px >> 11) & 0x1F) << 3;
-        uint8_t g = ((px >>  5) & 0x3F) << 2;
-        uint8_t b = ( px        & 0x1F) << 3;
-        int score = r * 3 + g * 2 + b;
-
-        static constexpr int SUPPRESS_BELOW = 1;
-        static constexpr int THRESH_LIGHT   = 90;
-        static constexpr int THRESH_MEDIUM  = 150;
-        static constexpr int THRESH_HEAVY   = 190;
-        static constexpr int THRESH_SEVERE  = 230;
-
-        if (score < SUPPRESS_BELOW) return 0x0000;
-
-        if (!isSnow) {
-            static constexpr uint16_t RAIN_LGREEN = 0x2D40;
-            static constexpr uint16_t RAIN_GREEN  = 0x04E0;
-            static constexpr uint16_t RAIN_YELLOW = 0xFFE0;
-            static constexpr uint16_t RAIN_ORANGE = 0xFC40;
-            static constexpr uint16_t RAIN_RED    = 0xF800;
-            static constexpr uint16_t RAIN_PURPLE = 0x8010;
-            if      (score < THRESH_LIGHT)  return RAIN_LGREEN;
-            else if (score < THRESH_MEDIUM) return RAIN_GREEN;
-            else if (score < THRESH_HEAVY)  return RAIN_YELLOW;
-            else if (score < THRESH_SEVERE) return RAIN_ORANGE;
-            else if (score < 250)           return RAIN_RED;
-            else                            return RAIN_PURPLE;
-        } else {
-            static constexpr uint16_t SNOW_LTBLUE = 0x867F;
-            static constexpr uint16_t SNOW_BLUE   = 0x041F;
-            static constexpr uint16_t SNOW_BLUWHT = 0xAEFF;
-            static constexpr uint16_t SNOW_WHITE  = 0xFFFF;
-            static constexpr uint16_t SNOW_PINK   = 0xF81F;
-            if      (score < THRESH_LIGHT)  return SNOW_LTBLUE;
-            else if (score < THRESH_MEDIUM) return SNOW_BLUE;
-            else if (score < THRESH_HEAVY)  return SNOW_BLUWHT;
-            else if (score < THRESH_SEVERE) return SNOW_WHITE;
-            else                            return SNOW_PINK;
-        }
-    }
-
-    void _remapRadarColours(lgfx::LGFX_Sprite* spr, int w, int h, bool isSnow) {
-        static constexpr int SUPPRESS_BELOW = 30;
-        static constexpr int THRESH_LIGHT   = 90;
-        static constexpr int THRESH_MEDIUM  = 150;
-        static constexpr int THRESH_HEAVY   = 190;
-        static constexpr int THRESH_SEVERE  = 230;
-
-        static constexpr uint16_t RAIN_LGREEN = 0x2D40;
-        static constexpr uint16_t RAIN_GREEN  = 0x04E0;
-        static constexpr uint16_t RAIN_YELLOW = 0xFFE0;
-        static constexpr uint16_t RAIN_ORANGE = 0xFC40;
-        static constexpr uint16_t RAIN_RED    = 0xF800;
-        static constexpr uint16_t RAIN_PURPLE = 0x8010;
-
-        static constexpr uint16_t SNOW_LTBLUE = 0x867F;
-        static constexpr uint16_t SNOW_BLUE   = 0x041F;
-        static constexpr uint16_t SNOW_BLUWHT = 0xAEFF;
-        static constexpr uint16_t SNOW_WHITE  = 0xFFFF;
-        static constexpr uint16_t SNOW_PINK   = 0xF81F;
-
-        int remapped = 0, suppressed = 0;
-
-        for (int y = 0; y < h; y++) {
-            for (int x = 0; x < w; x++) {
-                uint16_t px = spr->readPixel(x, y);
-                if (px == 0x0000) continue;
-
-                uint8_t r = ((px >> 11) & 0x1F) << 3;
-                uint8_t g = ((px >>  5) & 0x3F) << 2;
-                uint8_t b = ( px        & 0x1F) << 3;
-                int score = r * 3 + g * 2 + b;
-
-                if (score < SUPPRESS_BELOW) {
-                    spr->drawPixel(x, y, 0x0000);
-                    suppressed++;
-                    continue;
-                }
-
-                uint16_t newCol;
-                if (!isSnow) {
-                    if      (score < THRESH_LIGHT)  newCol = RAIN_LGREEN;
-                    else if (score < THRESH_MEDIUM) newCol = RAIN_GREEN;
-                    else if (score < THRESH_HEAVY)  newCol = RAIN_YELLOW;
-                    else if (score < THRESH_SEVERE) newCol = RAIN_ORANGE;
-                    else if (score < 250)           newCol = RAIN_RED;
-                    else                            newCol = RAIN_PURPLE;
-                } else {
-                    if      (score < THRESH_LIGHT)  newCol = SNOW_LTBLUE;
-                    else if (score < THRESH_MEDIUM) newCol = SNOW_BLUE;
-                    else if (score < THRESH_HEAVY)  newCol = SNOW_BLUWHT;
-                    else if (score < THRESH_SEVERE) newCol = SNOW_WHITE;
-                    else                            newCol = SNOW_PINK;
-                }
-
-                spr->drawPixel(x, y, newCol);
-                remapped++;
-            }
-        }
-        Serial.printf("[RadarMap]   remap(%s): %d px remapped, %d suppressed\n",
-                      isSnow ? "snow" : "rain", remapped, suppressed);
     }
 
     // ------------------------------------------------------------------
@@ -821,42 +811,50 @@ private:
         spr->print(_timeStr);
     }
 
-#ifdef DEBUG
-    void _sampleTilePalette(lgfx::LGFX_Sprite* spr, int w, int h) {
-        Serial.printf("[Palette] Sampling %dx%d radar image...\n", w, h);
-        struct Entry { uint16_t colour; int count; };
-        static Entry hist[64];
-        int histCount = 0;
-        int transparent = 0, total = 0;
-        for (int y = 0; y < h; y++) {
-            for (int x = 0; x < w; x++) {
-                uint16_t px = spr->readPixel(x, y);
-                total++;
-                if (px == 0x0000) { transparent++; continue; }
-                bool found = false;
-                for (int i = 0; i < histCount; i++) {
-                    if (hist[i].colour == px) { hist[i].count++; found = true; break; }
-                }
-                if (!found && histCount < 64)
-                    hist[histCount++] = {px, 1};
-            }
-        }
-        for (int i = 0; i < histCount - 1; i++)
-            for (int j = i+1; j < histCount; j++)
-                if (hist[j].count > hist[i].count)
-                    { Entry t = hist[i]; hist[i] = hist[j]; hist[j] = t; }
-        Serial.printf("[Palette] Total: %d  transparent: %d  unique: %d\n",
-                      total, transparent, histCount);
-        int show = min(histCount, 24);
-        for (int i = 0; i < show; i++) {
-            uint16_t c = hist[i].colour;
-            uint8_t r = ((c >> 11) & 0x1F) << 3;
-            uint8_t g = ((c >>  5) & 0x3F) << 2;
-            uint8_t b = ( c        & 0x1F) << 3;
-            Serial.printf("[Palette]   0x%04X : %5d :  R=%3d G=%3d B=%3d\n",
-                          c, hist[i].count, r, g, b);
-        }
-        Serial.println("[Palette] Done.");
+//====================================================================
+// DEAD CODE COLLECTION
+
+
+    // ------------------------------------------------------------------
+    // _remapRadarColours() — remap MSC GeoMet palette
+    // ------------------------------------------------------------------
+    uint16_t _remapOnePixel(uint16_t px, bool isSnow) {
+
+        if (px == 0x0000) return 0x0000;
+        uint8_t r = ((px >> 11) & 0x1F) << 3;
+        uint8_t g = ((px >>  5) & 0x3F) << 2;
+        uint8_t b = ( px        & 0x1F) << 3;
+        int score = r * 3 + g * 2 + b*1;
+
+        static constexpr int SUPPRESS_BELOW = 60;
+        static constexpr int THRESH_LIGHT   = 80;
+        static constexpr int THRESH_MEDIUM  = 100;
+        static constexpr int THRESH_HEAVY   = 120;
+        static constexpr int THRESH_SEVERE  = 140;
+        static constexpr int THRESH_CATSANDDOGS  = 180;
+
+        if (score < SUPPRESS_BELOW) return 0x0000;
+
+  
+
+        if (!isSnow) {
+            static constexpr uint16_t RAIN_LGREEN = 0x2D40;
+            static constexpr uint16_t RAIN_GREEN  = 0xfc44;
+            static constexpr uint16_t RAIN_YELLOW = 0xFFE0;
+            static constexpr uint16_t RAIN_ORANGE = 0xFC40;
+            static constexpr uint16_t RAIN_RED    = 0xF800;
+            static constexpr uint16_t RAIN_PURPLE = 0x8010;
+
+    
+            if      (score < THRESH_LIGHT)  return RAIN_LGREEN;
+            else if (score < THRESH_MEDIUM) return RAIN_GREEN;
+            else if (score < THRESH_HEAVY)  return RAIN_YELLOW;
+            else if (score < THRESH_SEVERE) return RAIN_ORANGE;
+            else if (score < THRESH_CATSANDDOGS) return RAIN_RED;
+            else                            return RAIN_PURPLE;
+        } 
+        
+
     }
-#endif
+
 };
