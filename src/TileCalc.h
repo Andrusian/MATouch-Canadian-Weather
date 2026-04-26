@@ -53,8 +53,8 @@ struct TileGrid {
 //   z=9  → ~78  km wide   (covers ~100 km view with 2 tiles)
 //   z=10 → ~39  km wide   (covers ~50  km view with 2 tiles)
 // ----------------------------------------------------------------
-static constexpr int ZOOM_400KM = 7;
-static constexpr int ZOOM_100KM = 9;
+static constexpr int ZOOM_400KM = 6;
+static constexpr int ZOOM_100KM = 8;
 static constexpr int ZOOM_50KM  = 10;
 
 // Cycle order for center-tap gesture

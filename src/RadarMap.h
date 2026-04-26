@@ -224,7 +224,7 @@ public:
         static const char* zoomNames[ZOOM_LEVEL_COUNT] = { "400km", "100km", " 50km" };
         for (int i = 0; i < ZOOM_LEVEL_COUNT; i++) {
             char msg[32];
-            snprintf(msg, sizeof(msg), "Loading map %d/3 (%s)", i + 1, zoomNames[i]);
+            snprintf(msg, sizeof(msg), "Fetching base map %d/3 (%s)", i + 1, zoomNames[i]);
             printCenterMessage(msg,i*40);
             _fetchBasemap(i);
         }
@@ -249,7 +249,7 @@ public:
     void printCenterMessage(const char* message,int offset) {
         _display->setTextDatum(lgfx::middle_center);
         _display->setFont(&fonts::FreeSansBold12pt7b);
-        _display->setTextColor(TFT_WHITE);
+        _display->setTextColor(TFT_RED);
         _display->drawString(message, _display->width() / 2, _display->height() / 2+offset);
     }
 
@@ -284,7 +284,8 @@ bool onTouch(uint16_t tx, uint16_t ty) {
         switch (_zoomIndex) {
             case 0: return "400km";
             case 1: return "100km";
-            default: return " 50km";
+            case 2: return " 50km";
+            default: return "400km";
         }
     }
 
@@ -293,7 +294,8 @@ bool onTouch(uint16_t tx, uint16_t ty) {
         switch (idx) {
             case 0: return "400km";
             case 1: return "100km";
-            default: return " 50km";
+            case 2: return " 50km";
+            default: return "400km";
         }
     }
 
@@ -351,7 +353,7 @@ private:
         canvas.fillScreen(TFT_DARKGREY);
 
         int totalTiles = g.colCount * g.rowCount;
-        Serial.printf("[RadarMap] Fetching %d basemap tiles for zoom %d...\n",
+        Serial.printf("[RadarMap]  %d basemap tiles for zoom %d...\n",
                       totalTiles, idx);
         uint32_t t0 = millis();
 
@@ -396,8 +398,8 @@ private:
         canvas.pushSprite(_basemap[idx], -g.cropX, -g.cropY);
         canvas.deleteSprite();
 
-        _drawScaleBar(_basemap[idx], ZOOM_LEVELS[idx], CENTRE_LAT[idx]);
-        _drawZoomLabelOn(_basemap[idx], zoomLabelFor(idx));
+        //_drawScaleBar(_basemap[idx], ZOOM_LEVELS[idx], CENTRE_LAT[idx]);
+        //_drawZoomLabelOn(_basemap[idx], zoomLabelFor(idx));
 
         _basemapValid[idx] = true;
         Serial.printf("[RadarMap] Basemap[%d] ready.\n", idx);
@@ -464,8 +466,8 @@ private:
         }
 
         // UI overlays
-        _drawScaleBar(_composite, ZOOM_LEVELS[idx], CENTRE_LAT[idx]);
-        _drawZoomLabelOn(_composite, zoomLabel());
+        //_drawScaleBar(_composite, ZOOM_LEVELS[idx], CENTRE_LAT[idx]);
+        //_drawZoomLabelOn(_composite, zoomLabel());
         _drawTimestamp(_composite);
     }
 
@@ -802,13 +804,13 @@ void _handleMenuTouch(uint16_t x, uint16_t y) {
 
     void _drawTimestamp(lgfx::LGFX_Sprite* spr) {
         if (_timeStr[0] == '\0') return;
-        spr->setTextSize(1);
-        spr->setTextColor(TFT_BLACK, TFT_TRANSPARENT);
-        spr->setCursor(DISP_W - 51, 9);
+        spr->setTextSize(2);
+        spr->setTextColor(TFT_BLACK);
+        spr->setCursor(20, 9);
         spr->print(_timeStr);
-        spr->setTextColor(TFT_WHITE, TFT_TRANSPARENT);
-        spr->setCursor(DISP_W - 52, 8);
-        spr->print(_timeStr);
+//        spr->setTextColor(TFT_BLUE);
+//        spr->setCursor(DISP_W - 100, 8);
+//        spr->print(_timeStr);
     }
 
 //====================================================================

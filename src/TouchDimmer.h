@@ -13,7 +13,7 @@ public:
     static constexpr uint8_t  BRIGHTNESS_DIM   = 25;       // ~10% — tweak to taste
     static constexpr uint32_t DOUBLE_TAP_MS    = 500;
     static constexpr uint16_t CORNER_PX        = 80;
-    static constexpr uint32_t AUTO_DIM_MS      = 2UL * 60UL * 60UL * 1000UL;
+    static constexpr uint32_t AUTO_DIM_MS      = 6UL * 60UL * 60UL * 1000UL;
 
     using BrightnessCallback = std::function<void(uint8_t)>;
 
